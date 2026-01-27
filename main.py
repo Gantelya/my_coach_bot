@@ -17,6 +17,9 @@ ADMIN_ID = 5492881784
 
 # Настройка Gemini
 genai.configure(api_key=GEMINI_KEY, transport='rest')
+model = genai.GenerativeModel(
+    model_name='gemini-1.5-flash', 
+    system_instruction=SYSTEM_PROMPT
 
 # Системная инструкция (Личность тренера)
 SYSTEM_PROMPT = """
