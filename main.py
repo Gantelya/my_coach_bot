@@ -9,8 +9,8 @@ from fpdf import FPDF
 
 # --- КОНФИГУРАЦИЯ ---
 # Получаем ключи из "секретов" хостинга
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-GEMINI_KEY = os.getenv("GEMINI_KEY")
+TELEGRAM_TOKEN = "8523758786:AAEhTGNnBlhv0nFIll2eAJ6oIhr7_zT3IUo"
+GEMINI_KEY = "AIzaSyD6cGeB31R72i4pzoerETmx9LJhAaKSUYA"
 
 # Вставь сюда свой ID (получи его у @userinfobot), чтобы управлять админкой
 ADMIN_ID = 5492881784 
