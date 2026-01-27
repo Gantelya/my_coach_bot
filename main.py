@@ -18,7 +18,7 @@ SYSTEM_PROMPT = """
 TELEGRAM_TOKEN = "8523758786:AAEhTGNnBlhv0nFIll2eAJ6oIhr7_zT3IUo"
 GEMINI_KEY = "AIzaSyBQ81mPBqy0R-X_IQ7O9A_46LZJXFUlGyQ"
 
-genai.configure(api_key=GEMINI_KEY, transport='rest')
+genai.configure(api_key=GEMINI_KEY, transport='rest', default_api_version='v1')
 model = genai.GenerativeModel(
     model_name='models/gemini-1.5-flash-latest',
     system_instruction=SYSTEM_PROMPT)
