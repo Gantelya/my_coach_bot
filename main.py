@@ -6,8 +6,6 @@ from aiogram.filters import Command
 from aiogram.types import FSInputFile
 import google.generativeai as genai
 from fpdf import FPDF
-TELEGRAM_TOKEN = "8523758786:AAEhTGNnBlhv0nFIll2eAJ6oIhr7_zT3IUo"
-GEMINI_KEY = "AIzaSyBQ81mPBqy0R-X_IQ7O9A_46LZJXFUlGyQ"
 SYSTEM_PROMPT = """
 Ты — "Iron Corner", профессиональный тренер по боксу с 20-летним стажем.
 Твоя цель: привести пользователя к пиковой форме.
@@ -17,9 +15,12 @@ SYSTEM_PROMPT = """
 4. Если присылают фото еды: оцени калорийность и скажи, подходит ли это бойцу.
 В конце ответа желай "убойного настроя".
 """
+TELEGRAM_TOKEN = "8523758786:AAEhTGNnBlhv0nFIll2eAJ6oIhr7_zT3IUo"
+GEMINI_KEY = "AIzaSyBQ81mPBqy0R-X_IQ7O9A_46LZJXFUlGyQ"
+
 genai.configure(api_key=GEMINI_KEY, transport='rest')
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',
+    model_name='gemini-1.5-flash-latest',
     system_instruction=SYSTEM_PROMPT)
 
 # Вставь сюда свой ID (получи его у @userinfobot), чтобы управлять админкой
