@@ -10,13 +10,13 @@ from fpdf import FPDF
 # --- КОНФИГУРАЦИЯ ---
 # Получаем ключи из "секретов" хостинга
 TELEGRAM_TOKEN = "8523758786:AAEhTGNnBlhv0nFIll2eAJ6oIhr7_zT3IUo"
-GEMINI_KEY = "AIzaSyD6cGeB31R72i4pzoerETmx9LJhAaKSUYA"
+GEMINI_KEY = "AIzaSyBQ81mPBqy0R-X_IQ7O9A_46LZJXFUlGyQ"
 
 # Вставь сюда свой ID (получи его у @userinfobot), чтобы управлять админкой
 ADMIN_ID = 5492881784 
 
 # Настройка Gemini
-genai.configure(api_key=GEMINI_KEY)
+genai.configure(api_key=GEMINI_KEY, transport='rest')
 
 # Системная инструкция (Личность тренера)
 SYSTEM_PROMPT = """
