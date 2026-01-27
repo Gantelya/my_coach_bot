@@ -18,9 +18,9 @@ SYSTEM_PROMPT = """
 TELEGRAM_TOKEN = "8523758786:AAEhTGNnBlhv0nFIll2eAJ6oIhr7_zT3IUo"
 GEMINI_KEY = "AIzaSyBQ81mPBqy0R-X_IQ7O9A_46LZJXFUlGyQ"
 
-genai.configure(api_key=GEMINI_KEY, transport='rest', default_api_version='v1')
+genai.configure(api_key=GEMINI_KEY, transport='rest')
 model = genai.GenerativeModel(
-    model_name='models/gemini-1.5-flash-latest',
+    model_name='models/gemini-pro',
     system_instruction=SYSTEM_PROMPT)
 
 # Вставь сюда свой ID (получи его у @userinfobot), чтобы управлять админкой
