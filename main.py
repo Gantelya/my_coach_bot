@@ -31,11 +31,11 @@ SYSTEM_PROMPT = """
 4. Если присылают фото еды: оцени калорийность и скажи, подходит ли это бойцу.
 В конце ответа желай "убойного настроя".
 """
+genai.configure(api_key=GEMINI_KEY, transport='rest')
 
 model = genai.GenerativeModel(
     model_name='gemini-1.5-flash',
-    system_instruction=SYSTEM_PROMPT
-)
+    system_instruction=SYSTEM_PROMPT)
 
 # --- ПАМЯТЬ И СТАТИСТИКА ---
 user_history = {} # История диалогов: {user_id: [history]}
