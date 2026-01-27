@@ -121,8 +121,8 @@ async def admin_broadcast(message: types.Message):
     @dp.message(F.photo)
     async def handle_photo(message: types.Message):
         """Обработка фото (зрение)"""
-      user_id = message.from_user.id
-        all_users.add(user_id)
+    user_id = message.from_user.id
+    all_users.add(user_id)
     
     await message.answer("Анализирую фото... 🧐")
     
