@@ -163,7 +163,7 @@ async def chat_text(message: types.Message):
         user_history[user_id] = chat_session.history
         await message.reply(response.text)
     except Exception as e:
-        await message.reply("Связь прервалась. Повтори удар!")
+        await message.reply(f"Ошибка Gemini: {e}")
 
 # --- ЗАПУСК ---
 async def main():
