@@ -16,7 +16,7 @@ SYSTEM_PROMPT = """
 В конце ответа желай "убойного настроя".
 """
 TELEGRAM_TOKEN = "8523758786:AAEhTGNnBlhv0nFIll2eAJ6oIhr7_zT3IUo"
-GEMINI_KEY = "AIzaSyBQ81mPBqy0R-X_IQ7O9A_46LZJXFUlGyQ"
+GEMINI_KEY = "AIzaSyDdGp_rdGUxSccdvvGxnhsgDxsx8Ybmw5A"
 
 genai.configure(api_key=GEMINI_KEY, transport='rest')
 model = genai.GenerativeModel(
