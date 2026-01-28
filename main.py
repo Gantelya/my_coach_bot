@@ -16,11 +16,11 @@ SYSTEM_PROMPT = """
 В конце ответа желай "убойного настроя".
 """
 TELEGRAM_TOKEN = "8523758786:AAEhTGNnBlhv0nFIll2eAJ6oIhr7_zT3IUo"
-GEMINI_KEY = "AIzaSyDdGp_rdGUxSccdvvGxnhsgDxsx8Ybmw5A"
+GEMINI_KEY = "AIzaSyBEGFEA_NUpKpIy1_LJZt0uu5A-BKr--3I"
 
 genai.configure(api_key=GEMINI_KEY, transport='rest')
 model = genai.GenerativeModel(
-    model_name='gemini-pro',
+    model_name='gemini-1.5-flash',
     system_instruction=SYSTEM_PROMPT)
 
 # Вставь сюда свой ID (получи его у @userinfobot), чтобы управлять админкой
