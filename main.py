@@ -6,6 +6,22 @@ from aiogram.filters import Command
 from aiogram.types import FSInputFile
 import google.generativeai as genai
 from fpdf import FPDF
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# Фейковый сервер для Render
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive")
+
+def run_health_check():
+    server = HTTPServer(('0.0.0.0', 10000), HealthCheckHandler)
+    server.serve_forever()
+
+# Запускаем его в отдельном потоке
+threading.Thread(target=run_health_check, daemon=True).start()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_KEY = os.getenv("GEMINI_KEY")
 
