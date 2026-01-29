@@ -35,7 +35,7 @@ SYSTEM_PROMPT = """
 В конце ответа желай "убойного настроя".
 """
 
-genai.configure(api_key=GEMINI_KEY, transport='rest')
+genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel(
     model_name='gemini-1.5-flash',
     system_instruction=SYSTEM_PROMPT)
