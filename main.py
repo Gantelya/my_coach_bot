@@ -4,11 +4,11 @@ import io
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import FSInputFile
-import google.generativeai as genai
+from openai import OpenAI
 from fpdf import FPDF
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from PIL import Image
+import base64
 
 # Фейковый сервер для Render
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -26,8 +26,9 @@ def run_health_check():
 
 threading.Thread(target=run_health_check, daemon=True).start()
 
+# Настройки
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-GEMINI_KEY = os.getenv("GEMINI_KEY")
+XAI_API_KEY = os.getenv("XAI_API_KEY")  # Новый ключ от xAI
 
 SYSTEM_PROMPT = """
 Ты — "Iron Corner", профессиональный тренер по боксу с 20-летним стажем.
@@ -39,10 +40,10 @@ SYSTEM_PROMPT = """
 В конце ответа желай "убойного настроя".
 """
 
-# ИСПРАВЛЕНИЕ: конфигурация с транспортом для стабильного API
-genai.configure(
-    api_key=GEMINI_KEY,
-    transport='rest'  # Принудительно используем REST API (не gRPC)
+# Инициализация клиента Grok
+client = OpenAI(
+    api_key=XAI_API_KEY,
+    base_url="https://api.x.ai/v1"
 )
 
 ADMIN_ID = 5492881784 
@@ -54,18 +55,6 @@ bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
 
 # --- ФУНКЦИИ ---
-
-def get_model():
-    """Создание модели с правильными параметрами"""
-    return genai.GenerativeModel(
-        model_name='models/gemini-1.5-flash',  # Полное имя модели
-        generation_config={
-            'temperature': 0.7,
-            'top_p': 0.95,
-            'top_k': 40,
-            'max_output_tokens': 2048,
-        }
-    )
 
 def create_pdf(user_id, text):
     """Генерация PDF с планом"""
@@ -84,11 +73,31 @@ def create_pdf(user_id, text):
             text = "ERROR: Загрузите шрифт для кириллицы!"
 
     for line in text.split('\n'):
-        pdf.multi_cell(0, 10, txt=line)
+        try:
+            pdf.multi_cell(0, 10, txt=line)
+        except:
+            pdf.multi_cell(0, 10, txt=line.encode('latin-1', 'ignore').decode('latin-1'))
     
     filename = f"plan_{user_id}.pdf"
     pdf.output(filename)
     return filename
+
+def get_grok_response(messages):
+    """Получить ответ от Grok"""
+    try:
+        completion = client.chat.completions.create(
+            model="grok-beta",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=2000
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        return f"Ошибка Grok: {str(e)}"
+
+def encode_image_to_base64(image_bytes):
+    """Конвертация изображения в base64"""
+    return base64.b64encode(image_bytes).decode('utf-8')
 
 # --- ХЭНДЛЕРЫ ---
 
@@ -96,34 +105,43 @@ def create_pdf(user_id, text):
 async def start(message: types.Message):
     user_id = message.from_user.id
     all_users.add(user_id)
-    user_history[user_id] = []
+    user_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
     
     await message.answer(
         "🥊 В углу ринга! Я твой тренер Iron Corner.\n\n"
         "Команды:\n"
-        "/getplan - получить план тренировок (PDF)\n\n"
+        "/getplan - получить план тренировок (PDF)\n"
+        "/reset - очистить историю диалога\n\n"
         "Присылай фото еды для анализа или просто пиши — расскажи о себе: вес, возраст, цели?"
     )
+
+@dp.message(Command("reset"))
+async def reset(message: types.Message):
+    user_id = message.from_user.id
+    user_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    await message.answer("🔄 История диалога очищена. Начнём заново!")
 
 @dp.message(Command("getplan"))
 async def send_plan(message: types.Message):
     user_id = message.from_user.id
     
-    if user_id not in user_history or len(user_history[user_id]) == 0:
+    if user_id not in user_history or len(user_history[user_id]) <= 1:
         await message.answer("⚠️ Сначала расскажи о себе! Вес, возраст, цели...")
         return
     
     await message.answer("Готовлю твой боевой план... ⏳")
 
     try:
-        model = get_model()
+        # Создаём сообщения для запроса плана
+        plan_messages = user_history[user_id].copy()
+        plan_messages.append({
+            "role": "user",
+            "content": "Сформируй итоговый четкий план тренировок и питания на неделю в структурированном виде."
+        })
         
-        # Формируем промпт с системной инструкцией
-        full_prompt = f"{SYSTEM_PROMPT}\n\nСформируй итоговый четкий план тренировок и питания на неделю в структурированном виде."
+        response_text = get_grok_response(plan_messages)
         
-        response = model.generate_content(full_prompt)
-        
-        pdf_path = create_pdf(user_id, response.text)
+        pdf_path = create_pdf(user_id, response_text)
         document = FSInputFile(pdf_path)
         await message.bot.send_document(
             message.chat.id, 
@@ -137,10 +155,9 @@ async def send_plan(message: types.Message):
         await message.answer(f"❌ Сбой: {str(e)}")
 
 @dp.message(Command("stats"))
-async def admin_stats(message: types.
-Message):
+async def admin_stats(message: types.Message):
     if message.from_user.id == ADMIN_ID:
-        total_messages = sum(len(h) for h in user_history.values())
+        total_messages = sum(len(h) - 1 for h in user_history.values())  # -1 для system prompt
         await message.answer(
             f"📊 **Статистика:**\n"
             f"Всего бойцов: {len(all_users)}\n"
@@ -177,53 +194,83 @@ async def handle_photo(message: types.Message):
     await message.answer("🧐 Анализирую фото...")
     
     try:
+        # Инициализация истории
+        if user_id not in user_history:
+            user_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        
         # Скачиваем фото
         photo = message.photo[-1]
         file_info = await bot.get_file(photo.file_id)
-        photo_file = await bot.download_file(file_info.file_path)
+        photo_bytes = await bot.download_file(file_info.file_path)
         
-        # Открываем как PIL Image
-        image = Image.open(photo_file)
+        # Конвертируем в base64
+        image_base64 = encode_image_to_base64(photo_bytes.read())
         
-        if user_id not in user_history:
-            user_history[user_id] = []
+        # Формируем сообщение с изображением
+        user_history[user_id].append({
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Проанализируй это фото как тренер по боксу. Если это еда - оцени КБЖУ и калорийность. Если техника - дай рекомендации."
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{image_base64}"
+                    }
+                }
+            ]
+        })
         
-        model = get_model()
+        response_text = get_grok_response(user_history[user_id])
         
-        prompt = f"{SYSTEM_PROMPT}\n\nПроанализируй это фото как тренер по боксу. Если это еда - оцени КБЖУ и калорийность. Если техника - дай рекомендации."
+        # Сохраняем ответ в историю
+        user_history[user_id].append({
+            "role": "assistant",
+            "content": response_text
+        })
         
-        response = model.generate_content([prompt, image])
-        
-        await message.reply(response.text)
+        await message.reply(response_text)
         
     except Exception as e:
-        await message.reply(f"❌ Ошибка: {str(e)}\nПопробуй другое фото.")
+        await message.reply(f"❌ Ошибка: {str(e)}")
 
 @dp.message()
 async def chat_text(message: types.Message):
     user_id = message.from_user.id
     all_users.add(user_id)
     
+    # Инициализация истории
     if user_id not in user_history:
-        user_history[user_id] = []
+        user_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     try:
-        model = get_model()
+        # Добавляем сообщение пользователя
+        user_history[user_id].append({
+            "role": "user",
+            "content": message.text
+        })
         
-        # Добавляем системный промпт к запросу
-        full_prompt = f"{SYSTEM_PROMPT}\n\n{message.text}"
+        # Получаем ответ
+        response_text = get_grok_response(user_history[user_id])
         
-        response = model.generate_content(full_prompt)
+        # Сохраняем ответ
+        user_history[user_id].append({
+            "role": "assistant",
+            "content": response_text
+        })
         
-        await message.reply(response.text)
+        await message.reply(response_text)
         
     except Exception as e:
-        await message.reply(f"❌ Ошибка Gemini: {str(e)}")
+        await message.reply(f"❌ Ошибка: {str(e)}")
 
 # --- ЗАПУСК ---
 async def main():
-    print("🥊 Iron Corner бот запущен!")
+    print("🥊 Iron Corner бот запущен с Grok AI!")
     await dp.start_polling(bot)
 
-if __name__ == "__main__":
+if name == "__main__":
     asyncio.run(main())
+
