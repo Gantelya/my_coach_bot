@@ -271,6 +271,6 @@ async def main():
     print("🥊 Iron Corner бот запущен с Grok AI!")
     await dp.start_polling(bot)
 
-if name == "__main__":
+if __name__ == "__main__":
     asyncio.run(main())
 
