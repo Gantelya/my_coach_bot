@@ -1,4 +1,4 @@
-aiogram
+aiogram=3.7.0
 google-generativeai>=0.8.3
-fpdf2
-python-dotenv
+fpdf=1.7.2
+Pillow>=10.0.0
