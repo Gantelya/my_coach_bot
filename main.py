@@ -28,7 +28,7 @@ threading.Thread(target=run_health_check, daemon=True).start()
 
 # Настройки
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-XAI_API_KEY = os.getenv("XAI_API_KEY")  # Новый ключ от xAI
+XAI_API_KEY = os.getenv("XAI_API_KEY")
 
 SYSTEM_PROMPT = """
 Ты — "Iron Corner", профессиональный тренер по боксу с 20-летним стажем.
@@ -40,7 +40,6 @@ SYSTEM_PROMPT = """
 В конце ответа желай "убойного настроя".
 """
 
-# Инициализация клиента Grok
 client = OpenAI(
     api_key=XAI_API_KEY,
     base_url="https://api.x.ai/v1"
@@ -132,11 +131,9 @@ async def send_plan(message: types.Message):
     await message.answer("Готовлю твой боевой план... ⏳")
 
     try:
-        # Создаём сообщения для запроса плана
         plan_messages = user_history[user_id].copy()
         plan_messages.append({
-            "role": "user",
-            "content": "Сформируй итоговый четкий план тренировок и питания на неделю в структурированном виде."
+            "role": "user","content": "Сформируй итоговый четкий план тренировок и питания на неделю в структурированном виде."
         })
         
         response_text = get_grok_response(plan_messages)
@@ -157,7 +154,7 @@ async def send_plan(message: types.Message):
 @dp.message(Command("stats"))
 async def admin_stats(message: types.Message):
     if message.from_user.id == ADMIN_ID:
-        total_messages = sum(len(h) - 1 for h in user_history.values())  # -1 для system prompt
+        total_messages = sum(len(h) - 1 for h in user_history.values())
         await message.answer(
             f"📊 **Статистика:**\n"
             f"Всего бойцов: {len(all_users)}\n"
@@ -194,19 +191,15 @@ async def handle_photo(message: types.Message):
     await message.answer("🧐 Анализирую фото...")
     
     try:
-        # Инициализация истории
         if user_id not in user_history:
             user_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
         
-        # Скачиваем фото
         photo = message.photo[-1]
         file_info = await bot.get_file(photo.file_id)
         photo_bytes = await bot.download_file(file_info.file_path)
         
-        # Конвертируем в base64
         image_base64 = encode_image_to_base64(photo_bytes.read())
         
-        # Формируем сообщение с изображением
         user_history[user_id].append({
             "role": "user",
             "content": [
@@ -225,7 +218,6 @@ async def handle_photo(message: types.Message):
         
         response_text = get_grok_response(user_history[user_id])
         
-        # Сохраняем ответ в историю
         user_history[user_id].append({
             "role": "assistant",
             "content": response_text
@@ -241,21 +233,17 @@ async def chat_text(message: types.Message):
     user_id = message.from_user.id
     all_users.add(user_id)
     
-    # Инициализация истории
     if user_id not in user_history:
         user_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     try:
-        # Добавляем сообщение пользователя
         user_history[user_id].append({
             "role": "user",
             "content": message.text
         })
         
-        # Получаем ответ
         response_text = get_grok_response(user_history[user_id])
         
-        # Сохраняем ответ
         user_history[user_id].append({
             "role": "assistant",
             "content": response_text
@@ -269,8 +257,12 @@ async def chat_text(message: types.Message):
 # --- ЗАПУСК ---
 async def main():
     print("🥊 Iron Corner бот запущен с Grok AI!")
+    
+    # НОВОЕ: Удаляем webhook перед запуском
+    await bot.delete_webhook(drop_pending_updates=True)
+    print("✅ Webhook удалён, начинаем polling...")
+    
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-
