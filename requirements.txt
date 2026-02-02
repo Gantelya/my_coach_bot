@@ -1,4 +1,4 @@
 aiogram
-google-generativeai>=0.8.3
+google-genai>=0.8.3
 fpdf
 Pillow>=10.0.0
