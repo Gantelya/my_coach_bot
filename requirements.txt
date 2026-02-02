@@ -1,4 +1,4 @@
 aiogram
-openai==1.54.0
+openai=1.54.3
 fpdf
 Pillow>=10.3.0
