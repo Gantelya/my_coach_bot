@@ -4,7 +4,7 @@ import io
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import FSInputFile
-import google.genai as genai
+import google.generativeai as genai
 from fpdf import FPDF
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
