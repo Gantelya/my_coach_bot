@@ -1,10 +1,9 @@
 import os
 import asyncio
-import io
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import FSInputFile
-from openai import OpenAI
+from groq import Groq
 from fpdf import FPDF
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -28,7 +27,7 @@ threading.Thread(target=run_health_check, daemon=True).start()
 
 # Настройки
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-XAI_API_KEY = os.getenv("XAI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 SYSTEM_PROMPT = """
 Ты — "Iron Corner", профессиональный тренер по боксу с 20-летним стажем.
@@ -40,12 +39,10 @@ SYSTEM_PROMPT = """
 В конце ответа желай "убойного настроя".
 """
 
-client = OpenAI(
-    api_key=XAI_API_KEY,
-    base_url="https://api.x.ai/v1"
-)
+# Инициализация клиента Groq
+client = Groq(api_key=GROQ_API_KEY)
 
-ADMIN_ID = 5492881784 
+ADMIN_ID = 5492881784
 
 user_history = {}
 all_users = set()
@@ -56,7 +53,6 @@ dp = Dispatcher()
 # --- ФУНКЦИИ ---
 
 def create_pdf(user_id, text):
-    """Генерация PDF с планом"""
     pdf = FPDF()
     pdf.add_page()
     
@@ -81,22 +77,18 @@ def create_pdf(user_id, text):
     pdf.output(filename)
     return filename
 
-def get_grok_response(messages):
-    """Получить ответ от Grok"""
+def get_ai_response(messages):
+    """Получить ответ от Groq"""
     try:
         completion = client.chat.completions.create(
-            model="grok-beta",
+            model="llama-3.3-70b-versatile",  # Бесплатная мощная модель
             messages=messages,
             temperature=0.7,
             max_tokens=2000
         )
         return completion.choices[0].message.content
     except Exception as e:
-        return f"Ошибка Grok: {str(e)}"
-
-def encode_image_to_base64(image_bytes):
-    """Конвертация изображения в base64"""
-    return base64.b64encode(image_bytes).decode('utf-8')
+        return f"Ошибка AI: {str(e)}"
 
 # --- ХЭНДЛЕРЫ ---
 
@@ -111,7 +103,7 @@ async def start(message: types.Message):
         "Команды:\n"
         "/getplan - получить план тренировок (PDF)\n"
         "/reset - очистить историю диалога\n\n"
-        "Присылай фото еды для анализа или просто пиши — расскажи о себе: вес, возраст, цели?"
+        "Расскажи о себе: вес, возраст, цели?"
     )
 
 @dp.message(Command("reset"))
@@ -133,19 +125,19 @@ async def send_plan(message: types.Message):
     try:
         plan_messages = user_history[user_id].copy()
         plan_messages.append({
-            "role": "user","content": "Сформируй итоговый четкий план тренировок и питания на неделю в структурированном виде."
+            "role": "user",
+            "content": "Сформируй итоговый четкий план тренировок и питания на неделю."
         })
         
-        response_text = get_grok_response(plan_messages)
-        
+        response_text = get_ai_response(plan_messages)
         pdf_path = create_pdf(user_id, response_text)
         document = FSInputFile(pdf_path)
+        
         await message.bot.send_document(
-            message.chat.id, 
-            document, 
+            message.chat.id,
+            document,
             caption="🏆 Твой план победы!"
         )
-        
         os.remove(pdf_path)
         
     except Exception as e:
@@ -156,7 +148,7 @@ async def admin_stats(message: types.Message):
     if message.from_user.id == ADMIN_ID:
         total_messages = sum(len(h) - 1 for h in user_history.values())
         await message.answer(
-            f"📊 **Статистика:**\n"
+            f"📊 Статистика:\n"
             f"Всего бойцов: {len(all_users)}\n"
             f"Активных диалогов: {len(user_history)}\n"
             f"Всего сообщений: {total_messages}"
@@ -166,7 +158,7 @@ async def admin_stats(message: types.Message):
 async def admin_broadcast(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
-        
+    
     text = message.text.replace("/broadcast", "").strip()
     if not text:
         await message.answer("Где текст? Пиши: /broadcast Текст")
@@ -175,58 +167,27 @@ async def admin_broadcast(message: types.Message):
     count = 0
     for uid in all_users:
         try:
-            await bot.send_message(uid, f"📢 **ТРЕНЕР НА СВЯЗИ:**\n{text}")
+            await bot.send_message(uid, f"📢 ТРЕНЕР НА СВЯЗИ:\n{text}")
             count += 1
             await asyncio.sleep(0.05)
         except:
             pass
-            
+    
     await message.answer(f"✅ Отправлено {count} из {len(all_users)} бойцам")
 
 @dp.message(F.photo)
 async def handle_photo(message: types.Message):
+    """Groq не поддерживает фото — отвечаем текстом"""
     user_id = message.from_user.id
     all_users.add(user_id)
     
-    await message.answer("🧐 Анализирую фото...")
+    if user_id not in user_history:
+        user_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
     
-    try:
-        if user_id not in user_history:
-            user_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-        
-        photo = message.photo[-1]
-        file_info = await bot.get_file(photo.file_id)
-        photo_bytes = await bot.download_file(file_info.file_path)
-        
-        image_base64 = encode_image_to_base64(photo_bytes.read())
-        
-        user_history[user_id].append({
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": "Проанализируй это фото как тренер по боксу. Если это еда - оцени КБЖУ и калорийность. Если техника - дай рекомендации."
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{image_base64}"
-                    }
-                }
-            ]
-        })
-        
-        response_text = get_grok_response(user_history[user_id])
-        
-        user_history[user_id].append({
-            "role": "assistant",
-            "content": response_text
-        })
-        
-        await message.reply(response_text)
-        
-    except Exception as e:
-        await message.reply(f"❌ Ошибка: {str(e)}")
+    await message.answer(
+        "📸 Анализ фото пока недоступен в бесплатной версии.\n"
+        "Опиши словами что ел, и я оценю КБЖУ!"
+    )
 
 @dp.message()
 async def chat_text(message: types.Message):
@@ -242,7 +203,7 @@ async def chat_text(message: types.Message):
             "content": message.text
         })
         
-        response_text = get_grok_response(user_history[user_id])
+        response_text = get_ai_response(user_history[user_id])
         
         user_history[user_id].append({
             "role": "assistant",
@@ -256,12 +217,8 @@ async def chat_text(message: types.Message):
 
 # --- ЗАПУСК ---
 async def main():
-    print("🥊 Iron Corner бот запущен с Grok AI!")
-    
-    # НОВОЕ: Удаляем webhook перед запуском
+    print("🥊 Iron Corner бот запущен с Groq AI!")
     await bot.delete_webhook(drop_pending_updates=True)
-    print("✅ Webhook удалён, начинаем polling...")
-    
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
