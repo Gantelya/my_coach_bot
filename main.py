@@ -217,6 +217,7 @@ async def handle_photo(message: types.Message):
 async def chat_text(message: types.Message):
     user_id = message.from_user.id
     username = message.from_user.username or "без username"
+    first_name = message.from_user.first_name or ""
     all_users.add(user_id)
     
     if user_id not in user_history:
