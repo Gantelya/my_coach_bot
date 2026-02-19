@@ -1,5 +1,7 @@
 import os
 import asyncio
+import json
+import redis.asyncio as aioredis
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import FSInputFile
@@ -7,15 +9,13 @@ from groq import Groq
 from fpdf import FPDF
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import base64
 
-# Фейковый сервер для Render
+# Фейковый сервер для Render/Railway
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"Bot is alive")
-    
     def log_message(self, format, *args):
         pass
 
@@ -26,9 +26,11 @@ def run_health_check():
 threading.Thread(target=run_health_check, daemon=True).start()
 
 # Настройки
-LOG_CHANNEL_ID = os.getenv("LOG_CHANNEL_ID")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+REDIS_URL = os.getenv("REDIS_URL")
+LOG_CHANNEL_ID = os.getenv("LOG_CHANNEL_ID")
+ADMIN_ID = 5492881784
 
 SYSTEM_PROMPT = """
 # ROLE
@@ -63,23 +65,75 @@ SYSTEM_PROMPT = """
 После того как я отвечу, составь подробный план на неделю и дай рекомендации по питанию.
 """
 
-# Инициализация клиента Groq
+# Инициализация
 client = Groq(api_key=GROQ_API_KEY)
-
-ADMIN_ID = 5492881784
-
-user_history = {}
-all_users = set()
-
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
+redis_client = None
+all_users = set()
 
-# --- ФУНКЦИИ ---
+# --- REDIS ФУНКЦИИ ---
+
+async def get_history(user_id: int):
+    try:
+        data = await redis_client.get(f"history:{user_id}")
+        if data:
+            return json.loads(data)
+    except:
+        pass
+    return [{"role": "system", "content": SYSTEM_PROMPT}]
+
+async def save_history(user_id: int, history: list):
+    try:
+        await redis_client.set(
+            f"history:{user_id}",
+            json.dumps(history, ensure_ascii=False)
+        )
+    except:
+        pass
+
+async def get_all_users():
+    try:
+        data = await redis_client.get("all_users")
+        if data:
+            return set(json.loads(data))
+    except:
+        pass
+    return set()
+
+async def save_all_users(users: set):
+    try:
+        await redis_client.set(
+            "all_users",
+            json.dumps(list(users))
+        )
+    except:
+        pass
+
+# --- AI ФУНКЦИЯ ---
+
+async def get_ai_response(messages, retries=3):
+    for attempt in range(retries):
+        try:
+            completion = await asyncio.to_thread(
+                client.chat.completions.create,
+                model="llama-3.3-70b-versatile",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=2000
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            if attempt == retries - 1:
+                return f"Ошибка AI после {retries} попыток: {str(e)}"
+            wait = (attempt + 1) * 2
+            await asyncio.sleep(wait)
+
+# --- PDF ---
 
 def create_pdf(user_id, text):
     pdf = FPDF()
     pdf.add_page()
-    
     try:
         pdf.add_font('CustomFont', '', 'font.ttf')
         pdf.set_font("CustomFont", size=12)
@@ -90,38 +144,24 @@ def create_pdf(user_id, text):
         except:
             pdf.set_font("Arial", size=12)
             text = "ERROR: Загрузите шрифт для кириллицы!"
-
     for line in text.split('\n'):
         try:
             pdf.multi_cell(0, 10, txt=line)
         except:
             pdf.multi_cell(0, 10, txt=line.encode('latin-1', 'ignore').decode('latin-1'))
-    
     filename = f"plan_{user_id}.pdf"
     pdf.output(filename)
     return filename
-
-def get_ai_response(messages):
-    """Получить ответ от Groq"""
-    try:
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",  # Бесплатная мощная модель
-            messages=messages,
-            temperature=0.7,
-            max_tokens=2000
-        )
-        return completion.choices[0].message.content
-    except Exception as e:
-        return f"Ошибка AI: {str(e)}"
 
 # --- ХЭНДЛЕРЫ ---
 
 @dp.message(Command("start"))
 async def start(message: types.Message):
     user_id = message.from_user.id
-    all_users.add(user_id)
-    user_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    
+    users = await get_all_users()
+    users.add(user_id)
+    await save_all_users(users)
+    await save_history(user_id, [{"role": "system", "content": SYSTEM_PROMPT}])
     await message.answer(
         "🥊 В углу ринга! Я твой тренер Iron Corner.\n\n"
         "Команды:\n"
@@ -133,81 +173,69 @@ async def start(message: types.Message):
 @dp.message(Command("reset"))
 async def reset(message: types.Message):
     user_id = message.from_user.id
-    user_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    await save_history(user_id, [{"role": "system", "content": SYSTEM_PROMPT}])
     await message.answer("🔄 История диалога очищена. Начнём заново!")
 
 @dp.message(Command("getplan"))
 async def send_plan(message: types.Message):
     user_id = message.from_user.id
-    
-    if user_id not in user_history or len(user_history[user_id]) <= 1:
+    history = await get_history(user_id)
+    if len(history) <= 1:
         await message.answer("⚠️ Сначала расскажи о себе! Вес, возраст, цели...")
         return
-    
     await message.answer("Готовлю твой боевой план... ⏳")
-
     try:
-        plan_messages = user_history[user_id].copy()
+        plan_messages = history.copy()
         plan_messages.append({
             "role": "user",
             "content": "Сформируй итоговый четкий план тренировок и питания на неделю."
         })
-        
-        response_text = get_ai_response(plan_messages)
-        pdf_path = create_pdf(user_id, response_text)
+        response_text = await get_ai_response(plan_messages)
+        pdf_path = await asyncio.to_thread(create_pdf, user_id, response_text)
         document = FSInputFile(pdf_path)
-        
         await message.bot.send_document(
             message.chat.id,
             document,
             caption="🏆 Твой план победы!"
         )
         os.remove(pdf_path)
-        
     except Exception as e:
         await message.answer(f"❌ Сбой: {str(e)}")
 
 @dp.message(Command("stats"))
 async def admin_stats(message: types.Message):
     if message.from_user.id == ADMIN_ID:
-        total_messages = sum(len(h) - 1 for h in user_history.values())
+        users = await get_all_users()
         await message.answer(
             f"📊 Статистика:\n"
-            f"Всего бойцов: {len(all_users)}\n"
-            f"Активных диалогов: {len(user_history)}\n"
-            f"Всего сообщений: {total_messages}"
+            f"Всего бойцов: {len(users)}\n"
         )
 
 @dp.message(Command("broadcast"))
 async def admin_broadcast(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
-    
     text = message.text.replace("/broadcast", "").strip()
     if not text:
         await message.answer("Где текст? Пиши: /broadcast Текст")
         return
-    
+    users = await get_all_users()
     count = 0
-    for uid in all_users:
+    for uid in users:
         try:
             await bot.send_message(uid, f"📢 ТРЕНЕР НА СВЯЗИ:\n{text}")
             count += 1
             await asyncio.sleep(0.05)
         except:
             pass
-    
-    await message.answer(f"✅ Отправлено {count} из {len(all_users)} бойцам")
+    await message.answer(f"✅ Отправлено {count} из {len(users)} бойцам")
 
 @dp.message(F.photo)
 async def handle_photo(message: types.Message):
-    """Groq не поддерживает фото — отвечаем текстом"""
     user_id = message.from_user.id
-    all_users.add(user_id)
-    
-    if user_id not in user_history:
-        user_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    
+    users = await get_all_users()
+    users.add(user_id)
+    await save_all_users(users)
     await message.answer(
         "📸 Анализ фото пока недоступен в бесплатной версии.\n"
         "Опиши словами что ел, и я оценю КБЖУ!"
@@ -218,39 +246,57 @@ async def chat_text(message: types.Message):
     user_id = message.from_user.id
     username = message.from_user.username or "без username"
     first_name = message.from_user.first_name or ""
-    all_users.add(user_id)
-    
-    if user_id not in user_history:
-        user_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    users = await get_all_users()
+    users.add(user_id)
+    await save_all_users(users)
+
+    history = await get_history(user_id)
 
     try:
-        user_history[user_id].append({
+        history.append({
             "role": "user",
             "content": message.text
         })
 
+        # Лог в канал
         if LOG_CHANNEL_ID:
-            await bot.send_message(
-                LOG_CHANNEL_ID,
-                f"{first_name} @{username}\n"
-                f"{user_id}\n"
-                f"{message.text}"
-            )
-            
-        response_text = get_ai_response(user_history[user_id])
-        
-        user_history[user_id].append({
+            try:
+                await bot.send_message(
+                    int(LOG_CHANNEL_ID),
+                    f"👤 {first_name} @{username}\n"
+                    f"🆔 {user_id}\n"
+                    f"💬 {message.text}"
+                )
+            except:
+                pass
+
+        response_text = await get_ai_response(history)
+
+        history.append({
             "role": "assistant",
             "content": response_text
         })
-        
+
+        # Ограничиваем историю — храним последние 20 сообщений + system
+        if len(history) > 21:
+            history = [history[0]] + history[-20:]
+
+        await save_history(user_id, history)
         await message.reply(response_text)
-        
+
     except Exception as e:
         await message.reply(f"❌ Ошибка: {str(e)}")
 
 # --- ЗАПУСК ---
 async def main():
+    global redis_client
+    redis_client = await aioredis.from_url(
+        REDIS_URL,
+        encoding="utf-8",
+        decode_responses=True
+    )
+    print("✅ Redis подключён!")
     print("🥊 Iron Corner бот запущен с Groq AI!")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
