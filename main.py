@@ -26,6 +26,7 @@ def run_health_check():
 threading.Thread(target=run_health_check, daemon=True).start()
 
 # Настройки
+LOG_CHANNEL_ID = os.getenv("LOG_CHANNEL_ID")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
