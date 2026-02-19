@@ -215,6 +215,7 @@ async def handle_photo(message: types.Message):
 @dp.message()
 async def chat_text(message: types.Message):
     user_id = message.from_user.id
+    username = message.from_user.username or "без username"
     all_users.add(user_id)
     
     if user_id not in user_history:
@@ -225,7 +226,15 @@ async def chat_text(message: types.Message):
             "role": "user",
             "content": message.text
         })
-        
+
+        if LOG_CHANNEL_ID:
+            await bot.send_message(
+                LOG_CHANNEL_ID,
+                f"{first_name} @{username}\n"
+                f"{user_id}\n"
+                f"{message.text}"
+            )
+            
         response_text = get_ai_response(user_history[user_id])
         
         user_history[user_id].append({
