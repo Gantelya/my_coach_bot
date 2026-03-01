@@ -114,7 +114,7 @@ iron_corner_bot/
 
 ```bash
 # 1. Клонировать репозиторий
-git clone https://github.com/username/my_coach_bot.git
+git clone https://github.com/Gantelya/my_coach_bot.git
 cd my_coach_bot
 
 # 2. Установить зависимости
