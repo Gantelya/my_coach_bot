@@ -17,16 +17,16 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 # Фейковый сервер для Railway
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
-def do_GET(self):
-self.send_response(200)
-self.end_headers()
-self.wfile.write(b"Bot is alive")
-def log_message(self, format, *args):
-pass
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive")
+    def log_message(self, format, *args):
+        pass
 
 def run_health_check():
-server = HTTPServer(('0.0.0.0', 10000), HealthCheckHandler)
-server.serve_forever()
+    server = HTTPServer(('0.0.0.0', 10000), HealthCheckHandler)
+    server.serve_forever()
 
 threading.Thread(target=run_health_check, daemon=True).start()
 
