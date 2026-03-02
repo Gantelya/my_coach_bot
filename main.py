@@ -580,8 +580,7 @@ async def send_plan_button(message: types.Message, state: FSMContext):
         response_text = await get_ai_response(plan_messages)
         pdf_path = await asyncio.to_thread(create_pdf, user_id, response_text)
         document = FSInputFile(pdf_path)
-        await message.bot.
-        send_document(message.chat.id, document, caption="🏆 Твой план победы!")
+        await message.bot.send_document(message.chat.id, document, caption="🏆 Твой план победы!")
         os.remove(pdf_path)
     except Exception as e:
         await message.answer(f"❌ Сбой: {str(e)}")
