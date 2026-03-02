@@ -102,277 +102,242 @@ redis_client = None
 # — FSM СОСТОЯНИЯ —
 
 class ReminderSetup(StatesGroup):
-waiting_for_time = State()
+    waiting_for_time = State()
 
 class ProgressInput(StatesGroup):
-waiting_for_weight = State()
-waiting_for_results = State()
+    waiting_for_weight = State()
+    waiting_for_results = State()
 
 class NutritionInput(StatesGroup):
-waiting_for_food = State()
-
-# — REDIS ФУНКЦИИ —
+    waiting_for_food = State()
+# --- REDIS ФУНКЦИИ ---
 
 async def get_history(user_id: int):
-try:
-data = await redis_client.get(f"history:{user_id}")
-if data:
-return json.loads(data)
-except:
-pass
-return [{"role": "system", "content": SYSTEM_PROMPT}]
+    try:
+        data = await redis_client.get(f"history:{user_id}")
+        if data:
+            return json.loads(data)
+    except:
+        pass
+    return [{"role": "system", "content": SYSTEM_PROMPT}]
 
 async def save_history(user_id: int, history: list):
-try:
-await redis_client.set(
-f"history:{user_id}",
-json.dumps(history, ensure_ascii=False)
-)
-except:
-pass
+    try:
+        await redis_client.set(
+            f"history:{user_id}",
+            json.dumps(history, ensure_ascii=False)
+        )
+    except:
+        pass
 
 async def get_all_users():
-try:
-data = await redis_client.get("all_users")
-if data:
-return set(json.loads(data))
-except:
-pass
-return set()
+    try:
+        data = await redis_client.get("all_users")
+        if data:
+            return set(json.loads(data))
+    except:
+        pass
+    return set()
 
 async def save_all_users(users: set):
-try:
-await redis_client.set("all_users", json.dumps(list(users)))
-except:
-pass
+    try:
+        await redis_client.set("all_users", json.dumps(list(users)))
+    except:
+        pass
 
 async def get_progress(user_id: int):
-try:
-data = await redis_client.get(f"progress:{user_id}")
-if data:
-return json.loads(data)
-except:
-pass
-return []
+    try:
+        data = await redis_client.get(f"progress:{user_id}")
+        if data:
+            return json.loads(data)
+    except:
+        pass
+    return []
 
 async def save_progress(user_id: int, progress: list):
-try:
-await redis_client.set(
-f"progress:{user_id}",
-json.dumps(progress, ensure_ascii=False)
-)
-except:
-pass
+    try:
+        await redis_client.set(
+            f"progress:{user_id}",
+            json.dumps(progress, ensure_ascii=False)
+        )
+    except:
+        pass
 
 async def get_nutrition_log(user_id: int):
-today = datetime.now().strftime("%Y-%m-%d")
-try:
-data = await redis_client.get(f"nutrition:{user_id}:{today}")
-if data:
-return json.loads(data)
-except:
-pass
-return []
+    today = datetime.now().strftime("%Y-%m-%d")
+    try:
+        data = await redis_client.get(f"nutrition:{user_id}:{today}")
+        if data:
+            return json.loads(data)
+    except:
+        pass
+    return []
 
 async def save_nutrition_log(user_id: int, log: list):
-today = datetime.now().strftime("%Y-%m-%d")
-try:
-await redis_client.set(
-f"nutrition:{user_id}:{today}",
-json.dumps(log, ensure_ascii=False),
-ex=86400  # Хранить 24 часа
-)
-except:
-pass
+    today = datetime.now().strftime("%Y-%m-%d")
+    try:
+        await redis_client.set(
+            f"nutrition:{user_id}:{today}",
+            json.dumps(log, ensure_ascii=False),
+            ex=86400  # Хранить 24 часа
+        )
+    except:
+        pass
+
 async def get_reminder_time(user_id: int):
-try:
-data = await redis_client.get(f"reminder:{user_id}")
-if data:
-return data
-except:
-pass
-return None
+    try:
+        data = await redis_client.get(f"reminder:{user_id}")
+        if data:
+            return data
+    except:
+        pass
+    return None
 
 async def save_reminder_time(user_id: int, time_str: str):
-try:
-await redis_client.set(f"reminder:{user_id}", time_str)
-except:
-pass
+    try:
+        await redis_client.set(f"reminder:{user_id}", time_str)
+    except:
+        pass
 
 async def delete_reminder(user_id: int):
-try:
-await redis_client.delete(f"reminder:{user_id}")
-except:
-pass
+    try:
+        await redis_client.delete(f"reminder:{user_id}")
+    except:
+        pass
 
-# — AI ФУНКЦИЯ —
+# --- AI ФУНКЦИЯ ---
 
 async def get_ai_response(messages, retries=3):
-for attempt in range(retries):
-try:
-completion = await asyncio.to_thread(
-client.chat.completions.create,
-model="llama-3.3-70b-versatile",
-messages=messages,
-temperature=0.7,
-max_tokens=2000
-)
-return completion.choices[0].message.content
-except Exception as e:
-if attempt == retries - 1:
-return f"Ошибка AI после {retries} попыток: {str(e)}"
-await asyncio.sleep((attempt + 1) * 2)
+    for attempt in range(retries):
+        try:
+            completion = await asyncio.to_thread(
+                client.chat.completions.create,
+                model="llama-3.3-70b-versatile",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=2000
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            if attempt == retries - 1:
+                return f"Ошибка AI после {retries} попыток: {str(e)}"
+            await asyncio.sleep((attempt + 1) * 2)
 
-# — PDF —
+# --- PDF ---
 
 def create_pdf(user_id, text):
-pdf = FPDF()
-pdf.add_page()
-try:
-pdf.add_font('CustomFont', '', 'font.ttf')
-pdf.set_font("CustomFont", size=12)
-except:
-try:
-pdf.add_font('DejaVu', '', 'DejaVuSans.ttf')
-pdf.set_font("DejaVu", size=12)
-except:
-pdf.set_font("Arial", size=12)
-text = "ERROR: Загрузите шрифт для кириллицы!"
-for line in text.split('\n'):
-try:
-pdf.multi_cell(0, 10, txt=line)
-except:
-pdf.multi_cell(0, 10, txt=line.encode('latin-1', 'ignore').decode('latin-1'))
-filename = f"plan_{user_id}.pdf"
-pdf.output(filename)
-return filename
+    pdf = FPDF()
+    pdf.add_page()
+    try:
+        pdf.add_font('CustomFont', '', 'font.ttf')
+        pdf.set_font("CustomFont", size=12)
+    except:
+        try:
+            pdf.add_font('DejaVu', '', 'DejaVuSans.ttf')
+            pdf.set_font("DejaVu", size=12)
+        except:
+            pdf.set_font("Arial", size=12)
+            text = "ERROR: Загрузите шрифт для кириллицы!"
+    for line in text.split('\n'):
+        try:
+            pdf.multi_cell(0, 10, txt=line)
+        except:
+            pdf.multi_cell(0, 10, txt=line.encode('latin-1', 'ignore').decode('latin-1'))
+    filename = f"plan_{user_id}.pdf"
+    pdf.output(filename)
+    return filename
 
-# — ФОНОВАЯ ЗАДАЧА: НАПОМИНАНИЯ —
+# --- ФОНОВАЯ ЗАДАЧА: НАПОМИНАНИЯ ---
 
 async def reminder_loop():
-"""Каждую минуту проверяет — кому отправить напоминание"""
-while True:
-try:
-now = datetime.now().strftime("%H:%M")
-users = await get_all_users()
-for user_id in users:
-reminder_time = await get_reminder_time(int(user_id))
-if reminder_time == now:
-try:
-await bot.send_message(
-int(user_id),
-"🥊 БОЕЦ, ВРЕМЯ ТРЕНИРОВКИ!\n\n"
-"Ты поставил напоминание на это время.\n"
-"Вставай и работай — никаких отмазок!\n\n"
-"Напиши мне и я скажу что делать сегодня 💪"
-)
-except:
-pass
-except:
-pass
-await asyncio.sleep(60)  # Проверяем каждую минуту
+    """Каждую минуту проверяет — кому отправить напоминание"""
+    while True:
+        try:
+            now = datetime.now().strftime("%H:%M")
+            users = await get_all_users()
+            for user_id in users:
+                reminder_time = await get_reminder_time(int(user_id))
+                if reminder_time == now:
+                    try:
+                        await bot.send_message(
+                            int(user_id),
+                            "🥊 БОЕЦ, ВРЕМЯ ТРЕНИРОВКИ!\n\n"
+                            "Ты поставил напоминание на это время.\n"
+                            "Вставай и работай — никаких отмазок!\n\n"
+                            "Напиши мне и я скажу что делать сегодня 💪"
+                        )
+                    except:
+                        pass
+        except:
+            pass
+        await asyncio.sleep(60)  # Проверяем каждую минуту
 
-# — КЛАВИАТУРЫ —
+# --- КЛАВИАТУРЫ ---
 
 def main_keyboard():
-return ReplyKeyboardMarkup(
-keyboard=[
-[KeyboardButton(text="🏋️ Тренировка"), KeyboardButton(text="🍽 Дневник питания")],
-[KeyboardButton(text="📊 Мой прогресс"), KeyboardButton(text="⏰ Напоминание")],
-[KeyboardButton(text="📄 Получить план PDF")]
-],
-resize_keyboard=True
-)
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🏋️ Тренировка"), KeyboardButton(text="🍽 Дневник питания")],
+            [KeyboardButton(text="📊 Мой прогресс"), KeyboardButton(text="⏰ Напоминание")],
+            [KeyboardButton(text="📄 Получить план PDF")]
+        ],
+        resize_keyboard=True
+    )
 
-# — ХЭНДЛЕРЫ —
+# --- ХЭНДЛЕРЫ ---
 
 @dp.message(Command("start"))
 async def start(message: types.Message, state: FSMContext):
-await state.clear()
-user_id = message.from_user.id
-users = await get_all_users()
-users.add(user_id)
-await save_all_users(users)
-await save_history(user_id, [{"role”: “system", "content": SYSTEM_PROMPT}])
-await message.answer(
-    "🥊 В углу ринга! Я твой тренер Майк.\n\n"
-    "Выбирай что тебе нужно 👇",
-    reply_markup=main_keyboard()
-)
+    await state.clear()
+    user_id = message.from_user.id
+    users = await get_all_users()
+    users.add(user_id)
+    await save_all_users(users)
+    await save_history(user_id, [{"role": "system", "content": SYSTEM_PROMPT}])
+
+    await message.answer(
+        "🥊 В углу ринга! Я твой тренер Iron Corner.\n\n"
+        "Выбирай что тебе нужно 👇",
+        reply_markup=main_keyboard()
+    )
 
 @dp.message(Command("reset"))
 async def reset(message: types.Message, state: FSMContext):
-await state.clear()
-user_id = message.from_user.id
-await save_history(user_id, [{"role": "system", "content": SYSTEM_PROMPT}])
-await message.answer("🔄 История диалога очищена. Начнём заново!", reply_markup=main_keyboard())
+    await state.clear()
+    user_id = message.from_user.id
+    await save_history(user_id, [{"role": "system", "content": SYSTEM_PROMPT}])
+    await message.answer("🔄 История диалога очищена. Начнём заново!", reply_markup=main_keyboard())
+
 
 # ===== НАПОМИНАНИЯ =====
 
 @dp.message(F.text == "⏰ Напоминание")
 async def reminder_menu(message: types.Message, state: FSMContext):
-await state.clear()
-user_id = message.from_user.id
-current = await get_reminder_time(user_id)
-if current:
-    keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="✏️ Изменить время")],
-            [KeyboardButton(text="❌ Отключить напоминание")],
-            [KeyboardButton(text="🔙 Назад")]
-        ],
-        resize_keyboard=True
-    )
-    await message.answer(
-        f"⏰ Напоминание установлено на {current}\n\n"
-        "Что хочешь сделать?",
-        reply_markup=keyboard
-    )
-else:
-    await state.set_state(ReminderSetup.waiting_for_time)
-    await message.answer(
-        "⏰ В какое время напоминать о тренировке?\n\n"
-        "Напиши время в формате ЧЧ:ММ\n"
-        "Например: 07:00 или 18:30",
-        reply_markup=ReplyKeyboardRemove()
-    )
-
-@dp.message(F.text == "✏️ Изменить время")
-async def change_reminder(message: types.Message, state: FSMContext):
-    await state.set_state(ReminderSetup.waiting_for_time)
-    await message.answer(
-        "⏰ Введи новое время в формате ЧЧ:ММ\nНапример: 07:00 или 18:30",
-        reply_markup=ReplyKeyboardRemove()
-    )
-
-@dp.message(F.text == "❌ Отключить напоминание")
-async def disable_reminder(message: types.Message, state: FSMContext):
     await state.clear()
-    await delete_reminder(message.from_user.id)
-    await message.answer("❌ Напоминание отключено.", reply_markup=main_keyboard())
-
-@dp.message(ReminderSetup.waiting_for_time)
-async def set_reminder_time(message: types.Message, state: FSMContext):
-    time_text = message.text.strip()
-    # Проверяем формат ЧЧ:ММ
-    try:
-        datetime.strptime(time_text, "%H:%M")
-    except ValueError:
-        await message.answer("❌ Неверный формат! Напиши время так: 07:00 или 18:30")
-        return
-
-    await save_reminder_time(message.from_user.id, time_text)
-    await state.clear()
-    await message.answer(
-        f"✅ Отлично! Буду напоминать о тренировке каждый день в {time_text} 🥊",
-        reply_markup=main_keyboard()
-    )
-
-@dp.message(F.text == "🔙 Назад")
-async def go_back(message: types.Message, state: FSMContext):
-    await state.clear()
-    await message.answer("Главное меню 👇", reply_markup=main_keyboard())
-
+    user_id = message.from_user.id
+    current = await get_reminder_time(user_id)
+    if current:
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="✏️ Изменить время")],
+                [KeyboardButton(text="❌ Отключить напоминание")],
+                [KeyboardButton(text="🔙 Назад")]
+            ],
+            resize_keyboard=True
+        )
+        await message.answer(
+            f"⏰ Напоминание установлено на {current}\n\n"
+            "Что хочешь сделать?",
+            reply_markup=keyboard
+        )
+    else:
+        await state.set_state(ReminderSetup.waiting_for_time)
+        await message.answer(
+            "⏰ В какое время напоминать о тренировке?\n\n"
+            "Напиши время в формате ЧЧ:ММ\n"
+            "Например: 07:00 или 18:30",
+            reply_markup=ReplyKeyboardRemove()
+        )
 # ===== ПРОГРЕСС ТРЕКЕР =====
 
 @dp.message(F.text == "📊 Мой прогресс")
