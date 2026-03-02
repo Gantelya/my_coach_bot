@@ -296,7 +296,7 @@ async def start(message: types.Message, state: FSMContext):
     await save_history(user_id, [{"role": "system", "content": SYSTEM_PROMPT}])
 
     await message.answer(
-        "🥊 В углу ринга! Я твой тренер Iron Corner.\n\n"
+        "🥊 В углу ринга! Я твой тренер Майк.\n\n"
         "Выбирай что тебе нужно 👇",
         reply_markup=main_keyboard()
     )
