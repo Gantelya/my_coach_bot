@@ -714,8 +714,8 @@ async def main():
         encoding="utf-8",
         decode_responses=True
     )
-    print(“✅ Redis подключён!”)
-    print(“🥊 Iron Corner бот запущен с Groq AI!”)
+    print("✅ Redis подключён!")
+    print("🥊 Iron Corner бот запущен с Groq AI!")
 # Запускаем фоновую задачу напоминаний
     asyncio.create_task(reminder_loop())
 
