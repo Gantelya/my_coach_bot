@@ -2,7 +2,6 @@ import os
 import asyncio
 import json
 import re
-import urllib.request
 from datetime import datetime
 import redis.asyncio as aioredis
 from aiogram import Bot, Dispatcher, types, F
@@ -12,7 +11,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from groq import Groq
-from fpdf import FPDF
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -39,36 +37,13 @@ LOG_CHANNEL_ID = os.getenv("LOG_CHANNEL_ID")
 ADMIN_ID = 5492881784
 
 SYSTEM_PROMPT = """
-# ROLE
-Ты — Элитный Главный Тренер по боксу с 30-летним стажем. Ты воспитал чемпионов мира, обладаешь глубокими знаниями в биомеханике, физиологии, нутрициологии и спортивной психологии. Ты сочетал в своей практике советскую школу бокса (техника и выносливость), кубинскую (чувство дистанции и тайминг) и американскую (профессиональный подход и атлетизм).
-
-# GOAL
-Твоя задача — составить для меня комплексную программу подготовки, которая включает:
-1. Индивидуальный план тренировок (работа на мешке, лапах, бой с тенью, ОФП и СФП).
-2. План питания, рассчитанный под мои цели (сгонка веса, набор массы или поддержание формы).
-3. Режим дня и лайфстайл-советы (сон, дисциплина, ментальный настрой).
-4. Программу восстановления (растяжка, работа с триггерными точками, баня, добавки).
-
-# CHARACTER & TONE
-- Твой тон: прямой, мотивирующий, но профессиональный. Ты не даешь поблажек, но заботишься о здоровье ученика. 
-- Ты используешь боксерский сленг (джеб, кросс, сайд-степ, работа на ногах, «проваливание» соперника).
-- Ты всегда объясняешь «зачем» мы делаем то или иное упражнение.
-
-# KNOWLEDGE BASE
-- Физиология: Ты знаешь, как работает лактатный порог, ЧСС и как избежать перетренированности.
-- Нутрициология: Ты рассчитываешь КБЖУ, исходя из интенсивности тренировок.
-- Восстановление: Ты мастер периодизации нагрузок.
-
-# INTERACTION PROTOCOL
-Прежде чем составить план, ты ДОЛЖЕН задать мне следующие вопросы (дождись моих ответов):
-1. Мой возраст, вес и рост?
-2. Уровень подготовки в боксе (новичок, любитель, профи)?
-3. Какая цель (научиться драться с нуля, подготовиться к бою, просто подтянуть форму)?
-4. Какой инвентарь доступен (полный зал, только гантели, или вообще ничего)?
-5. Есть ли травмы или ограничения по здоровью?
-6. Сколько раз в неделю и по сколько времени я готов тренироваться?
-
-После того как я отвечу, составь подробный план на неделю и дай рекомендации по питанию.
+Ты — "Iron Corner", профессиональный тренер по боксу с 20-летним стажем.
+Твоя цель: привести пользователя к пиковой форме.
+1. Тренировки: составляй планы (мешок, лапы, бой с тенью, ОФП).
+2. Питание: считай КБЖУ, анализируй описание еды.
+3. Стиль: мотивирующий, жесткий, но справедливый. Используй сленг (джеб, тайминг).
+4. Помни всю историю переписки с пользователем и не предлагай повторно то, что уже обсуждали.
+В конце ответа желай "убойного настроя".
 """
 
 NUTRITION_PROMPT = """
@@ -223,43 +198,19 @@ async def get_ai_response(messages, retries=3):
                 return f"Ошибка AI после {retries} попыток: {str(e)}"
             await asyncio.sleep((attempt + 1) * 2)
 
-# --- PDF С ПОДДЕРЖКОЙ КИРИЛЛИЦЫ ---
+# --- СОЗДАНИЕ TXT ФАЙЛА (вместо PDF — надёжно работает с кириллицей) ---
 
-def create_pdf(user_id, text):
-    font_path = "DejaVuSans.ttf"
+def create_plan_file(user_id, text):
+    today = datetime.now().strftime("%d.%m.%Y")
+    header = f"🥊 IRON CORNER — ТВОЙ БОЕВОЙ ПЛАН\n"
+    header += f"Дата: {today}\n"
+    header += "=" * 40 + "\n\n"
 
-    # Скачиваем шрифт с поддержкой кириллицы если его нет
-    if not os.path.exists(font_path):
-        try:
-            urllib.request.urlretrieve(
-                "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf",
-                font_path
-            )
-            print("✅ Шрифт DejaVuSans скачан!")
-        except Exception as e:
-            print(f"❌ Не удалось скачать шрифт: {e}")
+    full_text = header + text
 
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-
-    # Используем скачанный шрифт или запасной вариант
-    if os.path.exists(font_path):
-        pdf.add_font("DejaVu", "", font_path)
-        pdf.set_font("DejaVu", size=12)
-    else:
-        # Запасной вариант — убираем кириллицу
-        pdf.set_font("Helvetica", size=12)
-        text = text.encode("ascii", "ignore").decode("ascii")
-
-    for line in text.split("\n"):
-        try:
-            pdf.multi_cell(0, 10, txt=line)
-        except Exception:
-            pass
-
-    filename = f"plan_{user_id}.pdf"
-    pdf.output(filename)
+    filename = f"plan_{user_id}.txt"
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(full_text)
     return filename
 
 # --- ФОНОВАЯ ЗАДАЧА: НАПОМИНАНИЯ ---
@@ -293,7 +244,7 @@ def main_keyboard():
         keyboard=[
             [KeyboardButton(text="🏋️ Тренировка"), KeyboardButton(text="🍽 Дневник питания")],
             [KeyboardButton(text="📊 Мой прогресс"), KeyboardButton(text="⏰ Напоминание")],
-            [KeyboardButton(text="📄 Получить план PDF")]
+            [KeyboardButton(text="📄 Получить план")]
         ],
         resize_keyboard=True
     )
@@ -379,7 +330,6 @@ async def disable_reminder(message: types.Message, state: FSMContext):
 
 @dp.message(ReminderSetup.waiting_for_time)
 async def set_reminder_time(message: types.Message, state: FSMContext):
-    # Ищем время в формате ЧЧ:ММ в любом месте сообщения
     match = re.search(r'\b(\d{1,2}:\d{2})\b', message.text)
     if not match:
         await message.answer(
@@ -486,11 +436,7 @@ async def progress_results(message: types.Message, state: FSMContext):
     today = datetime.now().strftime("%d.%m.%Y")
     progress = await get_progress(user_id)
 
-    new_entry = {
-        "date": today,
-        "weight": weight,
-        "results": results
-    }
+    new_entry = {"date": today, "weight": weight, "results": results}
     progress.append(new_entry)
 
     if len(progress) > 12:
@@ -583,11 +529,7 @@ async def process_meal(message: types.Message, state: FSMContext):
 
     now = datetime.now().strftime("%H:%M")
     log = await get_nutrition_log(user_id)
-    log.append({
-        "time": now,
-        "food": food_text,
-        "analysis": ai_response
-    })
+    log.append({"time": now, "food": food_text, "analysis": ai_response})
     await save_nutrition_log(user_id, log)
     await message.answer(ai_response)
 
@@ -611,33 +553,9 @@ async def show_today_nutrition(message: types.Message, state: FSMContext):
 
     await message.answer(text, reply_markup=main_keyboard())
 
-# ===== ТРЕНИРОВКА =====
+# ===== ПЛАН (TXT файл) =====
 
-@dp.message(F.text == "🏋️ Тренировка")
-async def training_menu(message: types.Message, state: FSMContext):
-    await state.clear()
-    user_id = message.from_user.id
-    history = await get_history(user_id)
-
-    await message.answer("💪 Готовлю тренировку на сегодня...", reply_markup=main_keyboard())
-
-    history.append({
-        "role": "user",
-        "content": "Дай мне тренировку на сегодня. Учти мои данные и историю наших тренировок."
-    })
-
-    response = await get_ai_response(history)
-    history.append({"role": "assistant", "content": response})
-
-    if len(history) > 21:
-        history = [history[0]] + history[-20:]
-
-    await save_history(user_id, history)
-    await message.answer(response)
-
-# ===== ПЛАН PDF =====
-
-@dp.message(F.text == "📄 Получить план PDF")
+@dp.message(F.text == "📄 Получить план")
 async def send_plan_button(message: types.Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
@@ -655,10 +573,16 @@ async def send_plan_button(message: types.Message, state: FSMContext):
             "content": "Сформируй итоговый четкий план тренировок и питания на неделю."
         })
         response_text = await get_ai_response(plan_messages)
-        pdf_path = await asyncio.to_thread(create_pdf, user_id, response_text)
-        document = FSInputFile(pdf_path)
-        await message.bot.send_document(message.chat.id, document, caption="🏆 Твой план победы!")
-        os.remove(pdf_path)
+
+        # Сохраняем как TXT — всегда работает с кириллицей
+        file_path = await asyncio.to_thread(create_plan_file, user_id, response_text)
+        document = FSInputFile(file_path)
+        await message.bot.send_document(
+            message.chat.id,
+            document,
+            caption="🏆 Твой план победы! Открой файл в любом текстовом редакторе."
+        )
+        os.remove(file_path)
     except Exception as e:
         await message.answer(f"❌ Сбой: {str(e)}")
 
@@ -668,10 +592,7 @@ async def send_plan_button(message: types.Message, state: FSMContext):
 async def admin_stats(message: types.Message):
     if message.from_user.id == ADMIN_ID:
         users = await get_all_users()
-        await message.answer(
-            f"📊 Статистика:\n"
-            f"Всего бойцов: {len(users)}\n"
-        )
+        await message.answer(f"📊 Статистика:\nВсего бойцов: {len(users)}\n")
 
 @dp.message(Command("broadcast"))
 async def admin_broadcast(message: types.Message):
