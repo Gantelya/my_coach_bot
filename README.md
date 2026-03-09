@@ -184,8 +184,9 @@ python main.py
 
 ## 👨‍💻 Автор
 Denis Gantelya — AI Automation Developer
+
 Специализируюсь на создании Telegram-ботов с интеграцией LLM.
-📬 [Telegram](https://t.me/@gantelya200) | [GitHub](https://github.com/Gantelya)
+📬 [Telegram](https://t.me/gantelya200) | [GitHub](https://github.com/Gantelya)
 
 
 -----
