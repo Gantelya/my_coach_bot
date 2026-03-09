@@ -1,4 +1,6 @@
 # 🥊 Iron Corner — AI Telegram-бот персонального тренера по боксу
+> AI-powered Telegram boxing coach bot built with Python, aiogram 3, 
+> Groq LLaMA 3.3 70B and Redis. Deployed on Railway.
 
 <div align="center">
 
