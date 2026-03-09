@@ -182,15 +182,11 @@ python main.py
 
 -----
 
-## 👨‍💻 Об авторе
+## 👨‍💻 Автор
+Denis Gantelya — AI Automation Developer
+Специализируюсь на создании Telegram-ботов с интеграцией LLM.
+📬 [Telegram](https://t.me/@gantelya200) | [GitHub](https://github.com/Gantelya)
 
-Проект разработан как pet-проект для изучения:
-
-- Асинхронного программирования на Python
-- Работы с Telegram Bot API через aiogram 3
-- Интеграции с LLM (Large Language Models)
-- Облачного деплоя и работы с Redis
-- Проектирования архитектуры чат-ботов
 
 -----
 
