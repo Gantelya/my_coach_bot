@@ -10,7 +10,7 @@
 ![Redis](https://img.shields.io/badge/Redis-5.0-red?style=for-the-badge&logo=redis)
 ![Railway](https://img.shields.io/badge/Deploy-Railway-purple?style=for-the-badge)
 
-**Telegram-бот с искусственным интеллектом, который заменяет персонального тренера по боксу**
+**Telegram-бот с искусственным интеллектом, который заменяет персонального тренера по боксу и диетолога.**
 
 [🤖 Открыть бота](https://t.me/IronCoach2033_bot)
 [📖 Документация](https://github.com/Gantelya/my_coach_bot#установка)
